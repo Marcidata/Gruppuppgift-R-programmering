@@ -1,42 +1,65 @@
-# ==============================
+# ============================================================
 # 1. Läs in paket och data
-# ==============================
+# ============================================================
+
 library(tidyverse)
 
-# Läs in datasetet (filen måste ligga i din working directory)
-df <- read.csv("ecommerce_orders.csv")
+# Läs in datasetet (kursens rekommenderade funktion)
+df <- read_csv("ecommerce_orders.csv")
 
-# ==============================
+
+# ============================================================
 # 2. Datasetets storlek
-# ==============================
-# Visar hur stort datasetet är
-dim(df)      # antal rader och kolumner
-nrow(df)     # antal rader
-ncol(df)     # antal kolumner
+# ============================================================
 
-# ==============================
+# Antal rader och kolumner
+dim(df)
+
+# Antal rader
+nrow(df)
+
+# Antal kolumner
+ncol(df)
+
+# ============================================================
 # 3. Variabler och datatyper
-# ==============================
-# Ger en snabb överblick över variablerna
+# ============================================================
+
+# Snabb överblick över variablerna
 glimpse(df)
 
-# Visar de första raderna i datasetet
+# Visa de första raderna
 head(df)
 
-# ==============================
-# 4. Saknade värden
-# ==============================
+# ============================================================
+# 4. Saknade värden (numerisk sammanfattning)
+# ============================================================
+
 # Antal saknade värden per kolumn
-colSums(is.na(df))
+missing_counts <- colSums(is.na(df))
+missing_counts
 
 # Procent saknade värden per kolumn
-colSums(is.na(df)) / nrow(df) * 100
+missing_pct <- colSums(is.na(df)) / nrow(df) * 100
+missing_pct
 
-# ==============================
-# 5. Visualisera saknade värden
-# ==============================
-# install.packages("naniar")  # kör bara första gången
-library(naniar)
+# Skapa en dataframe för visualisering (kursens metod)
+missing_df <- tibble(
+  kolumn = names(df),
+  antal_saknade = missing_counts
+)
 
-# Grafisk översikt över saknade värden
-vis_miss(df)
+# ============================================================
+# 5. Visualisering av saknade värden (kursens version)
+# ============================================================
+
+ggplot(missing_df, aes(x = kolumn, y = antal_saknade)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Saknade värden per kolumn",
+    x = "Kolumn",
+    y = "Antal saknade värden"
+  ) +
+  theme_minimal()
+
