@@ -5,7 +5,7 @@
 library(tidyverse)
 
 # Läs in datasetet (kursens rekommenderade funktion)
-df <- read_csv("ecommerce_orders.csv")
+df <- read_csv("data/ecommerce_orders.csv")
 
 
 # ============================================================
@@ -48,6 +48,28 @@ missing_df <- tibble(
   kolumn = names(df),
   antal_saknade = missing_counts
 )
+
+# En funktion som kollar svarsalternativ i kolumnen, för att undvika flera varianter av samma sak
+
+check_alter <- function(data, col) {
+  df %>%
+    count({{ col }}, sort = TRUE)
+}
+
+# Kolumner som behöver en check
+cat_col_in_df <- names(df)[
+  sapply(df, is.character) &
+    !names(df) %in% c("customer_id", "order_id", "order_date")
+]
+
+# En loop som printar ut resultat
+for (col in cat_col_in_df) {
+  cat("\n---", col, "---\n")
+  print(check_alter(df, !!sym(col)))
+}
+
+# Kolumner som behöver fixas om är campaign_source, payment_method och city
+
 
 # ============================================================
 # 5. Visualisering av saknade värden (kursens version)
