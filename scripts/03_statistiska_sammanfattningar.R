@@ -88,6 +88,9 @@ andel_payment_method <- df %>%
   arrange(desc(andel_procent))
 
 
+min_rea = min(df$discount_pct, na.rm = TRUE)
+max_rea = max(df$discount_pct, na.rm = TRUE)
+mean_rea = mean(df$discount_pct, na.rm = TRUE)
   
 # Printar ut taebller och varaibler så de syns i run_analys
 print("Antal kunder")
@@ -116,4 +119,9 @@ print("Sales per produktkategori")
 print(sales_per_product_category)
 print("Sales per subkategori")
 print(sales_per_subcategory)  
-
+print("Min discount")
+print(min_rea)
+print("Max discount")
+print(max_rea)
+print("Average discount")
+print(mean_rea)
