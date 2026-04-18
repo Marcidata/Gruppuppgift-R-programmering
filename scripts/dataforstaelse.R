@@ -46,9 +46,11 @@ missing_pct
 # Skapa en dataframe för visualisering (kursens metod)
 missing_df <- tibble(
   kolumn = names(df),
-  antal_saknade = missing_counts
+  antal_saknade = missing_counts,
+  procent_saknade =  missing_pct
 )
 
+missing_df
 # En funktion som kollar svarsalternativ i kolumnen, för att undvika flera varianter av samma sak
 
 check_alter <- function(data, col) {
