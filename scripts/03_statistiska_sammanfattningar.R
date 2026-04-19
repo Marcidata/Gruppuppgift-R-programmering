@@ -5,7 +5,7 @@
 
 #Laddar upp tidyverse och datan
 library(tidyverse)
-df <- read_csv("data/ecommerce_orders_clean.csv")
+df <- readRDS("data/df_clean.rds")
 
 # Grundläggande översikt 
 n_orders <- nrow(df)
