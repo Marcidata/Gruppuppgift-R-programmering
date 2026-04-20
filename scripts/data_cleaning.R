@@ -2,6 +2,8 @@ library(tidyverse)
 library(dplyr)
 library(stringi)
 
+
+
 df <- read_csv("data/ecommerce_orders.csv")
 
 # ---- städar datan ----
@@ -9,17 +11,15 @@ df_clean <- df |>
   rename_with(tolower) |> 
   mutate(
     across(
-      -c(order_id, customer_id),
-      ~ {
-        if (is.character(.x)) trimws(tolower(.x)) else .x
-      }
+      where(is.character) & !c(order_id, customer_id),
+      ~ trimws(tolower(.x))
     )
   ) |> 
   mutate(city = stri_trans_general(city, "Latin-ASCII")) |> 
   mutate(city = recode(city, "gothenburg" = "goteborg")) |> 
   mutate(campaign_source = recode(campaign_source, "social media" = "social"))
 
-#kollar så att det är rätt distinkta värden i varje kolumn
+#kollar så att det är rätt distinkta värden i några kolumner
 unique(df$city)
 unique(df_clean$city)
 
@@ -34,36 +34,36 @@ unique(df_clean$campaign_source)
 range(df_clean$order_date)
 
 # ---- Tar bort NA i discount ----
-df_clean <- df_clean %>%
+df_clean <- df_clean |> 
   filter(!is.na(discount_pct))
 
-# ---- Ändrar NA värdena för resternade kolumner ----
+# ---- hanterar saknade värden för resternade kolumner ----
 df_clean <- df_clean |> 
   mutate(
-    discount_pct = replace_na(discount_pct, 0),
     payment_method = replace_na(payment_method, "unknown"),
     city = replace_na(city, "unknown"),
     campaign_source = replace_na(campaign_source, "unknown"),
     shipping_days = replace_na(shipping_days, median(shipping_days, na.rm = TRUE))
   )
 
-# ---- skapar två ny relevanta columner ----
+# ---- skapar nya relevanta columner ----
 df_clean <- df_clean |> 
   mutate(
-    net_revenue = quantity * unit_price * (1 - discount_pct),
-    discount_group = case_when(
-      discount_pct <= quantile(discount_pct, 0.33) ~ "låg",
-      discount_pct <= quantile(discount_pct, 0.67) ~ "medel",
-      TRUE ~ "hög"
+    order_value = round(quantity * unit_price * (1 - discount_pct), 2),
+    returned_flag = if_else(returned == "yes", 1, 0),
+    discount_group = cut(discount_pct,
+                           breaks = seq(0, 0.40, by = 0.05),
+                           include.lowest = TRUE,
+                           ordered_result = TRUE
     )
-    
-    )
+  )
 
-# ---- faktoriserar kategoriska kolumner som kommer användas i analysen ----
+# ---- konverterar kategoriska kolumner för analys ----
 df_clean <- df_clean |> 
   mutate(
   product_category = as.factor(product_category),
-  product_subcategory = as.factor(product_subcategory),
-  discount_group = as.factor(discount_group)
+  product_subcategory = as.factor(product_subcategory)
 )
+
+saveRDS(df_clean, "data/df_clean.rds")
 
