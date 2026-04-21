@@ -1,0 +1,386 @@
+---
+title: "Rapport e-handelsanalys"
+author: Dariel Riera Carrillo, Isabel Holm, Jan Rajt, Marziyeh Akbari, Simon Stajduhar
+format: 
+  html: 
+    theme: lualatex
+    fig-align: left
+  pdf: default
+  #revealjs: default
+editor: visual
+code-links: repo
+---
+
+## Introduktion
+
+I denna rapport analyserar vi orderdata från ett e-handelsföretag som säljer produkter inom flera kategorier till kunder i olika regioner. Analysen utgår från tre frågeställningar:
+
+1.  Vilka produktkategorier driver högst försäljning?
+2.  Finns det ett samband mellan rabatt och ordervärde?
+3.  Finns det ett samband mellan rabatt och returfrekvens?
+
+Fokus ligger på relationen mellan rabatter, ordervärde och returer. Rabatter är ett vanligt verktyg för att driva försäljning men samtidigt kan påverka lönsamhet och returmönster.
+
+Rapporten inleds med en beskrivning av data och de förberedelser som gjorts innan analys. Därefter presenteras resultat och visualiseringar för respektive frågeställning, följt av en sammanfattande diskussion av de viktigaste insikterna.
+
+## Metod
+
+```{r}
+#| code-fold: true
+#| include: false
+
+library(tidyverse)
+library(dplyr)
+library(stringi)
+library(scales)
+```
+
+### Datainläsning och initial förståelse
+
+Datasetet lästes in med `read_csv()` från paketet `tidyverse` och innehåller 1 000 observationer fördelade på 16 variabler. En initial granskning genomfördes med `glimpse()` och `head()` för att bilda en uppfattning om variablernas struktur och datatyper.
+
+```{r}
+#| code-fold: true
+#| include: false
+
+df <- read_csv("data/ecommerce_orders.csv")
+```
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+df |>
+  head() |>
+  knitr::kable(caption = "De sex första observationerna i datasetet")
+```
+
+### Saknade värden
+
+Saknade värden identifierades för fem kolumner: city, payment_method, campaign_source, discount_pct och shipping_days. Av de variabler som är relevanta för denna analys förekommer saknade värden i discount_pct, där 27 observationer (2,7 %) saknar värde.
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+missing_counts <- colSums(is.na(df))
+
+missing_pct <- colSums(is.na(df)) / nrow(df) * 100
+
+missing_df <- tibble(
+  kolumn = names(df),
+  antal_saknade = missing_counts,
+  procent_saknade =  missing_pct
+)
+
+missing_df |>
+  knitr::kable(
+    caption = "Saknade värden",
+    col.names = c("Kolumn", "Antal", "Andel"),
+    digits = 1
+  )
+```
+
+### Dataförberedelser
+
+Innan analys genomfördes ett antal förberedande steg för att säkerställa datkvaliteten. Samtliga kolumnnamn gjordes enhetliga med gemener, och textvärden rensades från inledande och avslutande mellanslag samt konverterades till gemener. Specialtecken i stadnamn normaliserades, och ett antal stavningsvarianter i `city` och `campaign_source` harmoniserades till enhetliga värden.
+
+Datasetet täcker orderdata från 2025-01-01 till 2025-12-31.
+
+Observationer med saknade värden i `discount_pct` exkluderades från datasetet (27 observationer, 2,7 %). Saknade värden i övriga kolumner hanterades enligt följande: `payment_method`, `city` och `campaign_source` fylldes med kategorin **unknown**, medan saknade värden i `shipping_days` ersattes med medianvärdet.
+
+Kolumnerna `product_category` och `product_subcategory` konverterades till faktorer inför analysen.
+
+Avslutningsvis skapades tre nya variabler inför analysen:
+
+-   `order_value` - ordervärde beräknat som kvantitet × styckpris × (1 − rabatt)
+
+-   `returned_flag` - en binär variabel där 1 indikerar en returnerad order
+
+-   `discount_group` - rabatt grupperad i intervall om 5 procentenheter (0–40 %)
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: false
+
+df <- read_csv("data/ecommerce_orders.csv")
+
+df_clean <- df |> 
+  rename_with(tolower) |> 
+  mutate(
+    across(
+      where(is.character) & !c(order_id, customer_id),
+      ~ trimws(tolower(.x))
+    )
+  ) |> 
+  mutate(city = stri_trans_general(city, "Latin-ASCII")) |> 
+  mutate(city = recode(city, "gothenburg" = "goteborg")) |> 
+  mutate(campaign_source = recode(campaign_source, "social media" = "social"))
+
+# ---- Tar bort NA i discount ----
+df_clean <- df_clean |> 
+  filter(!is.na(discount_pct))
+
+# ---- hanterar saknade värden för resternade kolumner ----
+df_clean <- df_clean |> 
+  mutate(
+    payment_method = replace_na(payment_method, "unknown"),
+    city = replace_na(city, "unknown"),
+    campaign_source = replace_na(campaign_source, "unknown"),
+    shipping_days = replace_na(shipping_days, median(shipping_days, na.rm = TRUE))
+  )
+
+# ---- skapar nya relevanta columner ----
+df_clean <- df_clean |> 
+  mutate(
+    order_value = round(quantity * unit_price * (1 - discount_pct), 2),
+    returned_flag = if_else(returned == "yes", 1, 0),
+    discount_group = cut(discount_pct,
+                           breaks = seq(0, 0.40, by = 0.05),
+                           include.lowest = TRUE,
+                           ordered_result = TRUE
+    )
+  )
+
+# ---- konverterar kategoriska kolumner för analys ----
+df_clean <- df_clean |> 
+  mutate(
+  product_category = as.factor(product_category),
+  product_subcategory = as.factor(product_subcategory)
+)
+
+saveRDS(df_clean, "data/df_clean.rds")
+```
+
+## Resultat
+
+### Vilka produktkategorier driver högst försäljning?
+
+#### Total försäljning
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+total_sales <- sum(df_clean$order_value, na.rm = TRUE)
+
+cat("Total försäljning i perioden:", total_sales, "\n")
+```
+
+#### Produktkategorier som driver högst försäljning
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+df_clean <- readRDS("data/df_clean.rds")
+# --- Produktkategorier som driver högst försäljning ---
+sales_by_category <- df_clean |> 
+  group_by(product_category) |> 
+  summarise(total_sales = sum(order_value, na.rm = TRUE)) |> 
+  arrange(total_sales)
+
+ggplot(
+  sales_by_category, aes(x = reorder(product_category, total_sales), y = total_sales)) +
+  geom_col(fill = "#264653", width = 0.7) +
+  coord_flip() +
+  scale_y_continuous(labels = label_number(big.mark = " ")) +
+  labs(
+    title = "Produktkategorier som driver högst försäljning",
+    subtitle = "Total nettoförsäljning per produktkategori",
+    x = NULL,
+    y = "Försäljning"
+  ) +
+  theme_gray(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold")
+  )
+```
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+sales_per_product_category <- df_clean %>%
+  group_by(product_category) %>%
+  summarise(
+    total_sales = sum(order_value, na.rm = TRUE),
+    avg_order = mean(order_value, na.rm = TRUE), 
+    n_order = n()) %>% 
+    arrange(desc(total_sales))
+
+sales_per_product_category |>
+  knitr::kable(
+    caption = "Total försäljning per produktkategori",
+    col.names = c("Kategori", "Total försäljning", "Genomsnittligt ordervärde", "Antal ordrar"),
+    digits = 0
+  )
+```
+
+Analysen visar total försäljning, genomsnittligt ordervärde och antal ordrar per produktkategori. Där total försäljning för samtliga produkkategorier i perioden uppgår till 305 395 kr. Electronics är den klart dominerande kategorin med en total försäljning på 150 947 kr och ett genomsnittligt ordervärde på 645 kr per order. Home och Sports följer därefter, medan Fashion och Beauty står för betydligt lägre försäljningsvärden trots att Fashion har näst flest antal ordrar (229 st). Detta tyder på att Fashion präglas av låga ordervärden snarare än låg efterfrågan.
+
+### Finns det ett samband mellan rabatt och ordervärde?
+
+#### Översikt ordervärde
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+spridningsmatt <- df_clean %>%
+  summarise(
+    mean_order = mean(order_value, na.rm = TRUE),
+    median_order = median(order_value, na.rm = TRUE),
+    min_order = min(order_value, na.rm = TRUE),
+    max_order = max(order_value, na.rm = TRUE)
+  )
+
+spridningsmatt |>
+  knitr::kable(
+    caption = "Ordervärde i kr",
+    col.names = c("Mean", "Median", "Min", "Max"),
+    digits = 0
+  )
+```
+
+Ordervärdet i datasetet varierar kraftigt, med ett medelvärde på 314 kr och ett medianvärde på 151 kr, vilket tyder på en högersnedfördelning med ett antal höga ordervärden som drar upp medelvärdet. Det lägsta ordervärdet är 7 kr och det högsta 2 926 kr.
+
+#### Översikt rabatt
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+andel_rabatt <- df_clean |>  
+  summarise(andel_rabatt = mean(discount_pct > 0, na.rm = TRUE) * 100)
+min_rea <- min(df_clean$discount_pct[df_clean$discount_pct > 0], na.rm = TRUE)
+max_rea = max(df_clean$discount_pct, na.rm = TRUE)
+mean_rea <- mean(df_clean$discount_pct[df_clean$discount_pct > 0], na.rm = TRUE)
+
+tibble(
+  Mått = c("Andel ordrar med rabatt (%)", "Minsta rabatt", "Högsta rabatt", "Genomsnittlig rabatt"),
+  Värde = c(round(andel_rabatt$andel_rabatt, 1), 
+            scales::percent(min_rea, accuracy = 0.1),
+            scales::percent(max_rea, accuracy = 0.1),
+            scales::percent(mean_rea, accuracy = 0.1))
+) |>
+  knitr::kable(caption = "Översikt rabatter")
+```
+
+Hela 90,1 % av ordrarna innehåller någon form av rabatt, med en genomsnittlig rabatt på 7,8 % och ett max på 30,6 %.
+
+#### Samband mellan rabatt och ordervärde
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+ggplot(
+  df_clean, aes(x = discount_pct, y = order_value)) +
+  geom_point(alpha = 0.35, color = "#264653") +
+  geom_smooth(method = "lm", se = TRUE, color = "#D95F02", linewidth = 1.1) +
+  scale_x_continuous(labels = label_percent(accuracy = 1)) +
+  scale_y_continuous(labels = label_number(big.mark = " ")) +
+  labs(
+    title = "Samband mellan rabatt och ordervärde",
+    subtitle = "Varje punkt är en order",
+    x = "Rabatt (%)",
+    y = "Ordervärde"
+  ) +
+  theme_gray(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold")
+  ) +
+  annotate(
+    geom = "label",
+    x = 0.225, y = 600,
+    label = "Svagt negativt samband",
+    hjust = 0,
+    color = "black",
+    fill = "white"
+  ) +
+  annotate(
+    geom = "segment",
+    x = 0.22, y = 550,
+    xend = 0.20, yend = 300,
+    color = "black",
+    arrow = arrow(type = "closed")
+  )
+```
+
+Spridningsdiagrammet visar inget tydligt samband mellan rabatt och ordervärde. Trendlinjen är svagt negativ, men lutningen är minimal och spridningen stor, vilket tyder på att rabattens storlek inte har någon nämnvärd påverkan på ordervärdet.
+
+### Finns det ett samband mellan rabatt och returfrekvens?
+
+### Andel returer
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+mean_retur <- round(mean(df_clean$returned_flag, na.rm = TRUE) * 100, 2)
+cat("Andel returer i perioden (%):", mean_retur, "\n")
+```
+
+### Returgrad per rabattnivå
+
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+returns_by_discount <- df_clean |> 
+  group_by(discount_group) |> 
+  summarise(
+    return_rate = mean(returned_flag, na.rm = TRUE),
+    n_orders = n(),
+    .groups = "drop"
+  )
+
+returns_by_discount <- returns_by_discount |> 
+  filter(n_orders > 10)
+
+ggplot(
+  returns_by_discount, aes(x = discount_group, y = return_rate, group = 1)) +
+  geom_line(color = "#264653", linewidth = 1.2) +
+  geom_point(aes(size = n_orders), color = "#264653") +
+  scale_size(range = c(2, 8)) +
+  scale_y_continuous(labels = label_percent(accuracy = 1)) +
+  labs(
+    title = "Returgrad per rabattnivå",
+    subtitle = "Punktstorlek visar antal orders i varje rabattintervall",
+    x = "Rabattintervall",
+    y = "Returgrad",
+    size = "Antal orders"
+  ) +
+  theme_gray(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold")
+  )
+```
+
+Den totala returgraden i datasetet är 14,08 %. Grafen visar ett tydligt mönster där returgraden ökar med rabattnivån. Vid de lägsta rabattintervallen (0-10 %) ligger returgraden på runt 12 %, för att sedan stiga markant vid högre rabattnivåer. Vid rabatter mellan 20-25 % är returgraden uppe i 25 %, alltså drygt dubbelt så hög jämfört med de lägsta intervallen.
+
+Det bör noteras att de högre rabattintervallen representerar färre ordrar, vilket syns i den mindre punktstorleken. Sambandet är ändå tydligt nog för att tyda på att högre rabatter hänger ihop med en högre benägenhet att returnera ordern.
+
+## Slutsatser 
+
+Analysen visar att Electronics är den dominerande produktkategorin och står för den klart högsta försäljningen, trots att Fashion har näst flest antal ordrar. Detta tyder på stora skillnader i ordervärde mellan kategorier.
+
+Gällande sambandet mellan rabatt och ordervärde finner vi inget tydligt mönster. Trendlinjen är svagt negativ men spridningen är stor, vilket tyder på att rabattnivån inte är en avgörande faktor för hur mycket en kund spenderar per order.
+
+Däremot finns ett tydligare samband mellan rabatt och returer. Returgraden ökar markant med rabattnivån, från omkring 12 % vid låga rabatter till 25 % vid de högsta rabattintervallen. Detta är en relevant insikt för företaget, då höga rabatter riskerar att attrahera ordrar med högre returbenägenhet.
+
+## Begränsningar
+
+Datasetet omfattar 1 000 ordrar från ett enskilt år, vilket begränsar möjligheten att dra generella slutsatser. Sambandet mellan rabatt och returer samvarierar men kan inte tolkas som orsakssamband. Dessutom saknas information om exempelvis returorsak, vilket hade kunnat ge en djupare förståelse för returmönstren.
