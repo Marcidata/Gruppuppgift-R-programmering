@@ -1,93 +1,69 @@
-# Dariel
-# 02_data_cleaning.R – Datastädning & förberedelse
-# ══════════════════════════════════════════======
-
-# 1: Vi laddar paket
 library(tidyverse)
+library(dplyr)
+library(stringi)
 
-# 2: Läser in data
-#df <- read_csv("ecommerce_orders.csv")
 
-# 3: Utforskar datan
-#glimpse(df)
-#summary(df)
-#head(df)
 
-# 4: Hanterar saknade värden
-#colSums(is.na(df))
+df <- read_csv("data/ecommerce_orders.csv")
 
-# 5: Skapar nya variabler
-# order_value = faktiskt betalt belopp per order (kvantitet * pris efter rabatt)
-# Använder detta i analysen för att jämföra ordervärden mellan kategorier och rabattnivåer
-df <- df |>
+# ---- städar datan ----
+df_clean <- df |> 
+  rename_with(tolower) |> 
   mutate(
-    order_value = quantity * unit_price * (1 - discount_pct)
+    across(
+      where(is.character) & !c(order_id, customer_id),
+      ~ trimws(tolower(.x))
+    )
+  ) |> 
+  mutate(city = stri_trans_general(city, "Latin-ASCII")) |> 
+  mutate(city = recode(city, "gothenburg" = "goteborg")) |> 
+  mutate(campaign_source = recode(campaign_source, "social media" = "social"))
+
+#kollar så att det är rätt distinkta värden i några kolumner
+unique(df$city)
+unique(df_clean$city)
+
+unique(df$payment_method)
+unique(df_clean$payment_method)
+
+
+unique(df$campaign_source)
+unique(df_clean$campaign_source)
+
+# ---- intervall för min och max datum ----
+range(df_clean$order_date)
+
+# ---- Tar bort NA i discount ----
+df_clean <- df_clean |> 
+  filter(!is.na(discount_pct))
+
+# ---- hanterar saknade värden för resternade kolumner ----
+df_clean <- df_clean |> 
+  mutate(
+    payment_method = replace_na(payment_method, "unknown"),
+    city = replace_na(city, "unknown"),
+    campaign_source = replace_na(campaign_source, "unknown"),
+    shipping_days = replace_na(shipping_days, median(shipping_days, na.rm = TRUE))
   )
 
-head(df$order_value) # kollar lite att det fungerade det ovan
-# output:
-# [1] 110.92  89.90 190.22 138.49  94.55     NA
-
-# 6: Hanterar/Blir av med saknade värden
-df <- df |>
-  drop_na()
-
-# kollar lite att det fungerade det ovan
-nrow(df)  # [1] 879  -- ser bra ut
-colSums(is.na(df))  # ser bra ut
-
-
-# Funktion som trimmar mellanslag och gör till små bökstäver
-clean_text_col <- function(x) { 
-  trimws(tolower(x))
-}
-
-# Använder det på kolumner som behövde fixas 
-df$city <- clean_text_col(df$city)
-df$campaign_source <- clean_text_col(df$campaign_source)
-df$payment_method <- clean_text_col(df$payment_method)
-
-
-# Recodear allt till små bökstäver utan svenska tecken för att undvika förvirring
-df <- df %>%
+# ---- skapar nya relevanta columner ----
+df_clean <- df_clean |> 
   mutate(
-    city = recode(city,
-                  "stockholm" = "stockholm",
-                  "uppsala" = "uppsala",
-                  "halmstad" = "halmstad",
-                  "linkoping" = "linkoping",
-                  "vasteras" = "vasteras",
-                  "boras" = "boras",
-                  "helsingborg" = "helsingborg",
-                  "gothenburg" = "goteborg",
-                  "malmo" = "malmo",
-                  "orebro" = "orebro",
-                  "norrkoping" = "norrkoping",
-                  "lund" = "lund"
+    order_value = round(quantity * unit_price * (1 - discount_pct), 2),
+    returned_flag = if_else(returned == "yes", 1, 0),
+    discount_group = cut(discount_pct,
+                           breaks = seq(0, 0.40, by = 0.05),
+                           include.lowest = TRUE,
+                           ordered_result = TRUE
     )
   )
 
-df <- df %>%
+# ---- konverterar kategoriska kolumner för analys ----
+df_clean <- df_clean |> 
   mutate(
-    campaign_source = recode(campaign_source,
-                             "social media" = "social",
-                             "social" = "social",
-                             "paid search" = "paid search",
-                             "email" = "email",
-                             "direct" = "direct",
-                             "organic" = "organic",
-                             "affiliate" = "affiliate"
-    )
-  )
-df <- df %>%
-  mutate(across(
-    c(region, product_category, product_subcategory,
-      customer_type, customer_segment),
-    ~ trimws(tolower(.))
-  ))
+  product_category = as.factor(product_category),
+  product_subcategory = as.factor(product_subcategory)
+)
 
-
-
-# 7: Sparar städad data
-write_csv(df, "data/ecommerce_orders_clean.csv")
+saveRDS(df_clean, "data/df_clean.rds")
 
