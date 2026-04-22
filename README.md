@@ -6,6 +6,16 @@ import → förståelse → städning → statistik → visualisering → analys
 
 ---
 
+## Följande rågeställningar ska besvaras 
+
+- Vilka produktkategorier driver högst försäljning?
+- Finns det ett samband mellan rabatt och ordervärde?
+- Finns det ett samband mellan rabatt och returfrekvens?
+
+Fokus ligger på relationen mellan rabatter, ordervärde och returer.
+
+---
+
 ## Hur man kör projektet
 
 1. Öppna "Gruppuppgift-R-programmering.Rproj" i RStudio
