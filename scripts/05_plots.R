@@ -1,4 +1,5 @@
 library(scales)
+library(ggplot2)
 
 df_clean <- readRDS("data/df_clean.rds")
 # --- Produktkategorier som driver högst försäljning ---
@@ -86,6 +87,44 @@ plot_returnrate_vs_discountrate <- ggplot(
     plot.title = element_text(face = "bold")
   )
 
+# --- Rabattprocent efter returstatus ---
+
+means <- df_clean %>%
+  group_by(returned) %>%
+  summarise(mean_discount = mean(discount_pct, na.rm = TRUE))
+
+plot_discount_vs_returned <- ggplot(
+  df_clean,
+  aes(x = returned, y = discount_pct)
+) +
+  geom_boxplot(fill = "#264653") +
+  scale_y_continuous(labels = label_percent(accuracy = 1)) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  geom_text(
+    data = means,
+    aes(
+      x = returned,
+      y = mean_discount,
+      label = sprintf("Mean = %.3f%%", mean_discount)
+    ),
+    color = "red",
+    vjust = -1
+  ) +
+  labs(
+    title = "Rabattprocent efter returstatus",
+    subtitle = "Fördelning av rabattprocent för returnerade respektive icke returnerade varor",
+    x = "Returstatus",
+    y = "Rabatt (%)"
+  ) +
+  scale_x_discrete(labels = c(
+    "no" = "Nej (ej returnerad)",
+    "yes" = "Ja (Returnerad)"
+  )) +
+  theme_gray(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold")
+  )
+
 ggsave(
   "plots/category_vs_total_order_value.png",
   plot_category_vs_total_order_value,
@@ -103,6 +142,15 @@ ggsave(
 ggsave(
   "plots/returnrate_vs_discountrate.png",
   plot_returnrate_vs_discountrate,
+  width = 8,
+  height = 5,
+  dpi = 300
+)
+
+
+ggsave(
+  "plots/discount_vs_returned.png",
+  plot_discount_vs_returned,
   width = 8,
   height = 5,
   dpi = 300

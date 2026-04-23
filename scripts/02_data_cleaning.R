@@ -6,6 +6,9 @@ library(stringi)
 
 df <- read_csv("data/ecommerce_orders.csv")
 
+d <- df |>
+  filter(if_any(everything(), is.na))
+
 # ---- städar datan ----
 df_clean <- df |> 
   rename_with(tolower) |> 
