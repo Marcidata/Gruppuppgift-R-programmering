@@ -1,12 +1,9 @@
 ---
 title: "Rapport e-handelsanalys"
+subtitle: "Gruppuppgift - R-programmering för dataanalys"
 author: Dariel Riera Carrillo, Isabel Holm, Jan Rajt, Marziyeh Akbari, Simon Stajduhar
 format: 
-  html: 
-    theme: lualatex
-    fig-align: left
   pdf: default
-  #revealjs: default
 editor: visual
 code-links: repo
 ---
@@ -49,7 +46,7 @@ df <- read_csv("data/ecommerce_orders.csv")
 ```{r}
 #| code-fold: true
 #| echo: false
-#| include: true
+#| include: false
 
 df |>
   head() |>
@@ -283,6 +280,7 @@ Hela 90,1 % av ordrarna innehåller någon form av rabatt, med en genomsnittlig 
 #| code-fold: true
 #| echo: false
 #| include: true
+#| warning: false
 
 ggplot(
   df_clean, aes(x = discount_pct, y = order_value)) +
@@ -371,9 +369,55 @@ ggplot(
 
 Den totala returgraden i datasetet är 14,08 %. Grafen visar ett tydligt mönster där returgraden ökar med rabattnivån. Vid de lägsta rabattintervallen (0-10 %) ligger returgraden på runt 12 %, för att sedan stiga markant vid högre rabattnivåer. Vid rabatter mellan 20-25 % är returgraden uppe i 25 %, alltså drygt dubbelt så hög jämfört med de lägsta intervallen.
 
+```{r}
+#| code-fold: true
+#| echo: false
+#| include: true
+
+means <- df_clean %>%
+  group_by(returned) %>%
+  summarise(mean_discount = mean(discount_pct, na.rm = TRUE))
+
+ggplot(
+  df_clean,
+  aes(x = returned, y = discount_pct)
+) +
+  geom_boxplot(fill = "#264653") +
+  scale_y_continuous(labels = label_percent(accuracy = 1)) +
+  stat_summary(fun = mean, geom = "point", color = "red", size = 3) +
+  geom_text(
+    data = means,
+    aes(
+      x = returned,
+      y = mean_discount,
+      label = sprintf("Mean = %.3f%%", mean_discount)
+    ),
+    color = "red",
+    vjust = -1
+  ) +
+  labs(
+    title = "Rabattprocent efter returstatus",
+    subtitle = "Fördelning av rabattprocent för returnerade respektive icke returnerade varor",
+    x = "Returstatus",
+    y = "Rabatt (%)"
+  ) +
+  scale_x_discrete(labels = c(
+    "no" = "Nej (ej returnerad)",
+    "yes" = "Ja (Returnerad)"
+  )) +
+  theme_gray(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold")
+  )
+```
+
+Returnerade ordrar har en genomsnittlig rabatt på 8,1 % jämfört med 6,9 % för icke-returnerade ordrar. Ett t-testet visar att denna skillnad är statistiskt signifikant (p = 0,021), vilket innebär att det är osannolikt att skillnaden beror på slumpen.
+
+Skillnaden är dock liten, cirka 1,2 procentenheter, och boxploten visar att fördelningarna överlappar stort. Resultatet tyder alltså på ett svagt men statistiskt påvisbart samband mellan högre rabatt och returnerade ordrar, snarare än ett starkt eller avgörande samband.
+
 Det bör noteras att de högre rabattintervallen representerar färre ordrar, vilket syns i den mindre punktstorleken. Sambandet är ändå tydligt nog för att tyda på att högre rabatter hänger ihop med en högre benägenhet att returnera ordern.
 
-## Slutsatser 
+## Slutsatser
 
 Analysen visar att Electronics är den dominerande produktkategorin och står för den klart högsta försäljningen, trots att Fashion har näst flest antal ordrar. Detta tyder på stora skillnader i ordervärde mellan kategorier.
 
