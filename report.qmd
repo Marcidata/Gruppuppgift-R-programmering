@@ -1,12 +1,11 @@
 ---
 title: "Rapport e-handelsanalys"
+subtitle: "Gruppuppgift - R-programmering för dataanalys"
 author: Dariel Riera Carrillo, Isabel Holm, Jan Rajt, Marziyeh Akbari, Simon Stajduhar
 format: 
   html: 
     theme: lualatex
-    fig-align: left
   pdf: default
-  #revealjs: default
 editor: visual
 code-links: repo
 ---
@@ -49,7 +48,7 @@ df <- read_csv("data/ecommerce_orders.csv")
 ```{r}
 #| code-fold: true
 #| echo: false
-#| include: true
+#| include: false
 
 df |>
   head() |>
@@ -283,6 +282,7 @@ Hela 90,1 % av ordrarna innehåller någon form av rabatt, med en genomsnittlig 
 #| code-fold: true
 #| echo: false
 #| include: true
+#| warning: false
 
 ggplot(
   df_clean, aes(x = discount_pct, y = order_value)) +
@@ -371,9 +371,11 @@ ggplot(
 
 Den totala returgraden i datasetet är 14,08 %. Grafen visar ett tydligt mönster där returgraden ökar med rabattnivån. Vid de lägsta rabattintervallen (0-10 %) ligger returgraden på runt 12 %, för att sedan stiga markant vid högre rabattnivåer. Vid rabatter mellan 20-25 % är returgraden uppe i 25 %, alltså drygt dubbelt så hög jämfört med de lägsta intervallen.
 
+Detta mönster bekräftas av en kompletterande boxplot som visar att returnerade ordrar har ett något högre rabattsnitt jämfört med icke-returnerade ordrar, vilket ytterligare stödjer bilden av att högre rabatter hänger ihop med en något högre benägenhet att returnera ordern.
+
 Det bör noteras att de högre rabattintervallen representerar färre ordrar, vilket syns i den mindre punktstorleken. Sambandet är ändå tydligt nog för att tyda på att högre rabatter hänger ihop med en högre benägenhet att returnera ordern.
 
-## Slutsatser 
+## Slutsatser
 
 Analysen visar att Electronics är den dominerande produktkategorin och står för den klart högsta försäljningen, trots att Fashion har näst flest antal ordrar. Detta tyder på stora skillnader i ordervärde mellan kategorier.
 
